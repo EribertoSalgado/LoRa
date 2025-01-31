@@ -1,3 +1,5 @@
+#include <Arduino.h>
+
 long startTime;
 bool rx_done = false;
 bool received = false;
