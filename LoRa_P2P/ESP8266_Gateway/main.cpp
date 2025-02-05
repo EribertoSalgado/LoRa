@@ -1,15 +1,15 @@
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
-#include <sendRequest.h> 
 #include <ArduinoJson.h>
-const char* ssid  = "WIN-PNG6LLSRRPS 2281"; 
-const char* password = "V6i=9";
+
+const char* ssid  = "Pokemon Center"; 
+const char* password = "SalgadoE";
 
 String key = "&time=";
-String value = emptyString;
+String value = "";
 
-const String url = "youwebpage.php?";
+const String url = "https://lightpink-sheep-430801.hostingersite.com/DataBaseUrlDataPushingPageP2P.php?";
 const String getTimeUrl = "https://timeapi.io/api/Time/current/zone?timeZone=America/Los_Angeles";
 
 const size_t capacity = JSON_ARRAY_SIZE(10) + 10*JSON_OBJECT_SIZE(3) + 200;
@@ -19,7 +19,7 @@ String dataToBeSent = "";
 String currentTime;
 bool receivedFlag = false;
 
-void setup () {
+void setup() {
   Serial.begin(115200);
   Serial.println("ESP8266 UART Example");
   Serial.println("");
@@ -32,7 +32,8 @@ void setup () {
     Serial.print(".");
   }
 
-  connectionDetails();
+  Serial.println("Connected to WiFi");
+  Serial.println("IP address: " + WiFi.localIP().toString());
 }
 
 void loop() {
@@ -40,14 +41,26 @@ void loop() {
     String receivedData = Serial.readString();
     Serial.println("Received: " + receivedData);
     Serial.println("");
-    dataToBeSent = receivedData;
-    receivedFlag = true;
-  }
 
-  if (receivedFlag) {
-    delay(10000);
-  
-    if (WiFi.status() == WL_CONNECTED) {
+    // Example received data: node=node-1&light=0
+    String node = "";
+    String light = "";
+
+    // Split the received string by '&' to separate node and light
+    int nodeIndex = receivedData.indexOf("node=");
+    int lightIndex = receivedData.indexOf("light=");
+    
+    if (nodeIndex != -1 && lightIndex != -1) {
+      // Extract the 'node' value
+      node = receivedData.substring(nodeIndex + 5, receivedData.indexOf("&", nodeIndex));
+      // Extract the 'light' value
+      light = receivedData.substring(lightIndex + 6);
+
+      Serial.println("Extracted Node: " + node);
+      Serial.println("Extracted Light: " + light);
+
+      // Get current time
+      if (WiFi.status() == WL_CONNECTED) {
         WiFiClientSecure client;
         client.setInsecure();
         HTTPClient https;
@@ -62,7 +75,7 @@ void loop() {
 
           if (httpCode > 0) {
             String response = https.getString();
-            deserializeJson(doc, https.getString());
+            deserializeJson(doc, response);
             String time = doc["dateTime"];
             currentTime = time;
             Serial.println("The current datetime is: " + currentTime); 
@@ -74,13 +87,20 @@ void loop() {
         else {
           Serial.printf("[HTTPS] Unable to connect\n");
         }
-    }
-    if (WiFi.status() == WL_CONNECTED) {
+      }
+
+      // Construct the URL with node, light, and time values
+      String fullUrl = url + "node=" + node + "&light=" + light + "&time=" + currentTime;
+      delay(1000);
+      Serial.println("Requesting: --> " + fullUrl);
+      Serial.println("ERIBERTO");
+
+
+      // Send the POST request
+      if (WiFi.status() == WL_CONNECTED) {
         WiFiClientSecure client;
         client.setInsecure();
         HTTPClient https;
-        String fullUrl = url + key + currentTime;
-        Serial.println("Requesting: --> " + fullUrl);
 
         if (https.begin(client, fullUrl)) {
             https.addHeader("Content-Type", "application/x-www-form-urlencoded");
@@ -100,10 +120,11 @@ void loop() {
         else {
           Serial.printf("[HTTPS] Unable to connect\n");
         }
-
-        receivedFlag = false;
+      }
     }
 
-    delay(30000);
+    receivedFlag = false;
   }
+
+  delay(30000);  // Wait for 30 seconds before the next iteration
 }
