@@ -1,12 +1,11 @@
-// remove Tx and Rx from ESP on each upload then reconnect
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
 #include <sendRequest.h> 
 #include <ArduinoJson.h>
 
-const char* ssid  = "<>"; 
-const char* password = "<>";
+const char* ssid  = ""; 
+const char* password = "";
 
 const String url = "https://lightpink-sheep-430801.hostingersite.com/DataBaseUrlDataPushingPageP2P.php?";
 const String getTimeUrl = "https://timeapi.io/api/Time/current/zone?timeZone=America/Los_Angeles";
