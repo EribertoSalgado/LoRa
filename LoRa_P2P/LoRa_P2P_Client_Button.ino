@@ -144,13 +144,17 @@ void setup()
 }
 
 bool ReadSensor() {
-    static unsigned long lastPressTime = 0;
-    unsigned long currentTime = millis();
-    if (digitalRead(BUTTON_PIN) == HIGH && (currentTime - lastPressTime) > 50) {
-        lastPressTime = currentTime;
+    static bool lastButtonState = HIGH;
+    bool currentButtonState = digitalRead(BUTTON_PIN);
+    
+    if (lastButtonState == HIGH && currentButtonState == LOW) {
+        lastButtonState = currentButtonState; // Update state
         digitalWrite(LED_PIN, HIGH);  // Turn LED ON
+        delay(50); // Debounce delay
         return true;
     }
+
+    lastButtonState = currentButtonState; // Update state
     digitalWrite(LED_PIN, LOW);   // Turn LED OFF
     return false;
 }
