@@ -1,5 +1,4 @@
 #include <Arduino.h>
-#include <DHT.h>
 
 long startTime;
 bool rx_done = false;
@@ -7,6 +6,7 @@ double myFreq = 905500000;
 uint16_t sf = 12, bw = 0, cr = 0, preamble = 8, txPower = 5;
 
 uint64_t data = 0;
+String edgeNodeName = "node-1";
 
 void hexDump(uint8_t * buf, uint16_t len)
 {
@@ -140,34 +140,40 @@ void setup()
     int reading = random(0, 200);
     return reading;
   }
-
-  void loop()
-  {
+  
+void loop()
+{
     int data = ReadSensor();
-    String temp = "temp=" + String(data);
-    uint8_t payload[temp.length() + 1];
-    temp.getBytes(payload, temp.length() + 1);
+    String temp = "node=" + edgeNodeName + "&" + "light=" + String(data);
 
+    Serial.println("Generated Payload String:");
+    Serial.println(temp);
+
+    uint8_t payload[temp.length()];  // Fix: Remove extra byte for null character
+    temp.getBytes(payload, temp.length() + 1); 
+
+    Serial.println("Converted Payload (HEX):");
+    for (size_t i = 0; i < temp.length(); i++) { // Fix: Only iterate over temp.length()
+        Serial.printf("%02X ", payload[i]);
+    }
+    Serial.println();
+
+    Serial.println("Converted Payload (ASCII):");
+    for (size_t i = 0; i < temp.length(); i++) { // Fix: Only iterate over temp.length()
+        Serial.print((char)payload[i]);
+    }
+    Serial.println();
+    
     bool send_result = false;
-    int attempts = 0;
-    const int max_attempts = 5; // Set a maximum number of attempts
 
     if (rx_done) {
-      rx_done = false;
+        rx_done = false;
 
-      //while (!send_result && attempts < max_attempts){
-        send_result = api.lora.psend(temp.length() + 1, payload);
+        send_result = api.lora.psend(temp.length(), payload); // Fix: Send correct length
         Serial.printf("P2P send %s\r\n", send_result ? "Success" : "Fail");
 
-        //if (!send_result) {
-          delay(1000); // Wait before retrying
-        //}
-
-        attempts++;
-      //}
+        delay(1000);
     }
-
-    //api.lora.precv(30000);
 
     delay(60000);
 }
