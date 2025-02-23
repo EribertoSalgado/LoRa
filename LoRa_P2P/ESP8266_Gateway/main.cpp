@@ -4,8 +4,8 @@
 #include <sendRequest.h> 
 #include <ArduinoJson.h>
 
-const char* ssid  = ""; 
-const char* password = "";
+const char* ssid  = "<>"; 
+const char* password = "<>";
 
 const String url = "https://lightpink-sheep-430801.hostingersite.com/DataBaseUrlDataPushingPageP2P.php?";
 const String getTimeUrl = "https://timeapi.io/api/Time/current/zone?timeZone=America/Los_Angeles";
@@ -78,6 +78,7 @@ void loop() {
             Serial.println("");
 
             // **Update `dataToBeSent` now that we have `currentTime`**
+            // dB set up to only take 2 digit light values
             dataToBeSent = "node=" + nodeValue + "&time=" + currentTime + "&light=" + lightValue;
             Serial.println("Updated dataToBeSent: " + dataToBeSent);
           }
@@ -92,7 +93,7 @@ void loop() {
         WiFiClientSecure client;
         client.setInsecure();
         HTTPClient https;
-        String fullUrl = url + "time=" + currentTime;
+        String fullUrl = url + dataToBeSent;
         Serial.println("Requesting: --> " + fullUrl);
 
         if (https.begin(client, fullUrl)) {
@@ -100,7 +101,6 @@ void loop() {
 
             Serial.println("Final dataToBeSent: " + dataToBeSent);
             int httpCode = https.POST(dataToBeSent);
-
             Serial.println("Response code <--: " + String(httpCode));
 
             if (httpCode > 0) {
