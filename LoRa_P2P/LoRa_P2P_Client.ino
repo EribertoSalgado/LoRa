@@ -1,186 +1,166 @@
 #include <Arduino.h>
-#include <DHT.h>
 
-// Define the pin where the DHT11 is connected
-#define DHTPIN 2     // Pin connected to the DHT11 data pin
-#define DHTTYPE DHT11   // DHT 11
-
-// Create a DHT object
-DHT dht(DHTPIN, DHTTYPE);
-
-
-// LoRa Modulation Specific Information - center frequency, spreading factor, bandwidth, preamble length, transmission power.
-// Note that the server must have the values as the client in regards to the LoRa modulation parameters.
-double myFreq = 905500000;
-uint16_t sf = 12, bw = 0, cr = 0, preamble = 8, txPower = 5;
-
-
-
-// Setting inital conditions. 
+// LoRa Configuration
 long startTime;
 bool rx_done = false;
-uint64_t data = 0;
+bool received = false;
+double myFreq = 905500000;
+uint16_t sf = 12, bw = 0, cr = 0, preamble = 8, txPower = 5;
+String LoRaMessage = "";
 
-//String edgeNodeName = "unwantedNode-1";
-String edgeNodeName = "node-1";
+enum RegisteredNodes {
+  node_1, node_2, node_3, node_4, node_5,
+  node_6, node_7, node_8, node_9, node_10,
+  node_unknown
+};
 
-String serverToClientMsg = "";
-
-// This method prints the received data in the serial monitor.
-void hexDump(uint8_t * buf, uint16_t len)
-{
-    serverToClientMsg = "";
-    char alphabet[17] = "0123456789abcdef";
-    Serial.print(F("   +------------------------------------------------+ +----------------+\r\n"));
-    Serial.print(F("   |.0 .1 .2 .3 .4 .5 .6 .7 .8 .9 .a .b .c .d .e .f | |      ASCII     |\r\n"));
-    for (uint16_t i = 0; i < len; i += 16) {
-        if (i % 128 == 0)
-            Serial.print(F("   +------------------------------------------------+ +----------------+\r\n"));
-        char s[] = "|                                                | |                |\r\n";
-        uint8_t ix = 1, iy = 52;
-        for (uint8_t j = 0; j < 16; j++) {
-            if (i + j < len) {
-  	            uint8_t c = buf[i + j];
-  	            s[ix++] = alphabet[(c >> 4) & 0x0F];
-  	            s[ix++] = alphabet[c & 0x0F];
-  	            ix++;
-  	            if (c > 31 && c < 128)
-                {
-  	                s[iy++] = c;
-                    serverToClientMsg += (char)c;
-                }
-  	            else
-                {
-  	                s[iy++] = '.';
-                }
-            }
-        }
-        uint8_t index = i / 16;
-        if (i < 256)
-            Serial.write(' ');
-        Serial.print(index, HEX);
-        Serial.write('.');
-        Serial.print(s);
-    }
-    Serial.print(F("   +------------------------------------------------+ +----------------+\r\n"));
+// Function to extract values from query strings
+String getQueryValue(String query, String key) {
+  int startIndex = query.indexOf(key + "=");
+  if (startIndex == -1) return ""; // Key not found
+  startIndex += key.length() + 1;
+  int endIndex = query.indexOf("&", startIndex);
+  if (endIndex == -1) endIndex = query.length();
+  return query.substring(startIndex, endIndex);
 }
 
-/*
-  typedef struct rui_lora_p2p_revc {
-  // Pointer to the received data stream
-  uint8_t *Buffer;
-  // Size of the received data stream
-  uint8_t BufferSize;
-  // Rssi of the received packet
-  int16_t Rssi;
-  // Snr of the received packet
-  int8_t Snr;
-  } rui_lora_p2p_recv_t;
-*/
-void recv_cb(rui_lora_p2p_recv_t data)
-{
-    rx_done = true;
-
-    if (data.BufferSize == 0) {
-        Serial.println("...");
-        return;
+// Function to print received data in HEX and ASCII
+void hexDump(uint8_t *buf, uint16_t len) {
+    LoRaMessage = "";
+    received = true;
+    
+    Serial.println("\n--- Raw Data HEX Dump ---");
+    for (uint16_t i = 0; i < len; i++) {
+        Serial.printf("%02X ", buf[i]); // Print HEX
+        if (buf[i] >= 32 && buf[i] <= 126) {
+            LoRaMessage += (char)buf[i]; // Convert to ASCII if printable
+        } else {
+            LoRaMessage += '.'; // Replace non-printable with '.'
+        }
     }
+    Serial.println("\n-------------------------");
+}
 
-    char buff[92];
-
-    sprintf(buff, "Incoming message, length: %d, RSSI: %d, SNR: %d", data.BufferSize, data.Rssi, data.Snr);
-    Serial.println("The raw message:");
-    Serial.println(buff);
-    Serial.println();
-
+// Callback function when a message is received
+void recv_cb(rui_lora_p2p_recv_t data) {
+    rx_done = true;
+    Serial.println("\nIncoming message received!");
+    Serial.printf("Message Length: %d, RSSI: %d dBm, SNR: %d dB\n",
+                  data.BufferSize, data.Rssi, data.Snr);
+    
     hexDump(data.Buffer, data.BufferSize);
 }
 
-void send_cb(void)
-{
-  Serial.println("DATA SENT!!!");
-  delay(1000);
-  Serial.printf("P2P set Rx mode %s\r\n", api.lora.precv(10000) ? "Success" : "Fail");
+// Callback function when a message is sent
+void send_cb(void) {
+    Serial.printf("P2P set Rx mode %s\r\n",
+                  api.lora.precv(3000) ? "Success" : "Fail");
 }
 
-void setup()
-{
-  Serial.begin(115200);
-  dht.begin();
-  Serial.println("                 LoRa Client Set up!                  ");
-  Serial.println("------------------------------------------------------");
-  delay(1000);
-
-  startTime = millis();
-
-  if(api.lora.nwm.get() != 0)
-  {
-    Serial.printf("Set Node device work mode %s\r\n",
-    api.lora.nwm.set() ? "Success" : "Fail");
-    api.system.reboot();
-  }
-
-  // Printing various hardware and modultion parameters to the serial monitor.
-  Serial.println("P2P Start");
-  Serial.printf("Hardware ID: %s\r\n", api.system.chipId.get().c_str());
-  Serial.printf("Model ID: %s\r\n", api.system.modelId.get().c_str());
-  Serial.printf("RUI API Version: %s\r\n",
-  api.system.apiVersion.get().c_str());
-  Serial.printf("Firmware Version: %s\r\n",
-  api.system.firmwareVersion.get().c_str());
-  Serial.printf("AT Command Version: %s\r\n",
-  api.system.cliVersion.get().c_str());
-  Serial.printf("Set P2P mode frequency %3.3f: %s\r\n", (myFreq / 1e6),
-  api.lora.pfreq.set(myFreq) ? "Success" : "Fail");
-  Serial.printf("Set P2P mode spreading factor %d: %s\r\n", sf,
-  api.lora.psf.set(sf) ? "Success" : "Fail");
-  Serial.printf("Set P2P mode bandwidth %d: %s\r\n", bw,
-  api.lora.pbw.set(bw) ? "Success" : "Fail");
-  Serial.printf("Set P2P mode code rate 4/%d: %s\r\n", (cr + 5),
-  api.lora.pcr.set(cr) ? "Success" : "Fail");
-  Serial.printf("Set P2P mode preamble length %d: %s\r\n", preamble,
-  api.lora.ppl.set(preamble) ? "Success" : "Fail");
-  Serial.printf("Set P2P mode tx power %d: %s\r\n", txPower,
-  api.lora.ptp.set(txPower) ? "Success" : "Fail");
-  api.lora.registerPRecvCallback(recv_cb);
-  api.lora.registerPSendCallback(send_cb);
-  Serial.printf("P2P set Rx mode %s\r\n",
-  api.lora.precv(3000) ? "Success" : "Fail");
-
-  rx_done = true;
-}
-
-  float ReadSensor(){
-    float temperature = dht.readTemperature();
-    return temperature;
-  }
-
-  void loop()
-  {
-    int data = ReadSensor();
-
-    String temp = "node=" + edgeNodeName + "&" + "light=" + String(data);
-
-    uint8_t payload[temp.length() + 1];
-
-    temp.getBytes(payload, temp.length() + 1);
-
-    bool send_result = false;
-
-    int attempts = 0;
-
-    const int max_attempts = 5; // Set a maximum number of attempts
-
-    if (rx_done) {
-      rx_done = false;
-      send_result = api.lora.psend(temp.length() + 1, payload);
-      Serial.printf("P2P send %s\r\n", send_result ? "Success" : "Fail");
-      delay(1000);
-    }
-
+// **Setup Function**
+void setup() {
+    Serial.begin(115200);
+    Serial.println("🔹 [DEBUG] Board is booting...");
     delay(1000);
 
-    api.lora.precv(15000);
+    Serial1.begin(115200);
+    pinMode(PA7, OUTPUT);
+    
+    Serial.println("🔹 [DEBUG] Checking LoRa Initialization...");
 
-    delay(60000);
+    // Check if LoRa module is responding
+    if (api.lora.nwm.get() != 0) {
+        Serial.println("🔻 [ERROR] LoRa not in correct mode. Trying to set...");
+        bool success = api.lora.nwm.set();
+        Serial.printf("🔹 [DEBUG] LoRa mode set: %s\r\n", success ? "Success" : "Fail");
+        if (!success) {
+            Serial.println("🔻 [ERROR] LoRa initialization failed. Rebooting...");
+            api.system.reboot();
+        }
+    }
+
+    Serial.println("🔹 [DEBUG] LoRa Initialization Complete. Setting Parameters...");
+
+    // Set LoRa P2P parameters
+    Serial.printf("Set Frequency %3.3f MHz: %s\r\n", myFreq / 1e6,
+                  api.lora.pfreq.set(myFreq) ? "Success" : "Fail");
+    Serial.printf("Set Spreading Factor %d: %s\r\n", sf,
+                  api.lora.psf.set(sf) ? "Success" : "Fail");
+    Serial.printf("Set Bandwidth %d: %s\r\n", bw,
+                  api.lora.pbw.set(bw) ? "Success" : "Fail");
+    Serial.printf("Set Code Rate 4/%d: %s\r\n", (cr + 5),
+                  api.lora.pcr.set(cr) ? "Success" : "Fail");
+    Serial.printf("Set Preamble Length %d: %s\r\n", preamble,
+                  api.lora.ppl.set(preamble) ? "Success" : "Fail");
+    Serial.printf("Set TX Power %d dBm: %s\r\n", txPower,
+                  api.lora.ptp.set(txPower) ? "Success" : "Fail");
+
+    // Register callback functions
+    api.lora.registerPRecvCallback(recv_cb);
+    api.lora.registerPSendCallback(send_cb);
+
+    // Ensure RX mode is active
+    bool rx_status = api.lora.precv(5000);
+    Serial.printf("🔹 [DEBUG] RX Mode Status: %s\n", rx_status ? "Active" : "Fail");
+
+    // If RX Mode fails, halt execution
+    if (!rx_status) {
+        Serial.println("🔻 [ERROR] RX mode failed! Stopping execution...");
+        while (true) { delay(1000); }  // Infinite loop to halt system
+    }
+
+    Serial.println("🔹 [DEBUG] Setup Complete!");
 }
+
+// **Main Loop**
+void loop() {
+    Serial.println("🔹 [DEBUG] Loop is running... Checking for messages.");
+
+    bool rx_status = api.lora.precv(5000);
+    Serial.printf("🔹 [DEBUG] RX Mode Status (Loop): %s\n", rx_status ? "Active" : "Fail");
+
+    if (received) {
+        received = false;
+
+        Serial.println("🔹 [DEBUG] Message Received!");
+        Serial.print("🔹 [DEBUG] LoRaMessage: ");
+        Serial.println(LoRaMessage);
+
+        String nodeValue = getQueryValue(LoRaMessage, "node");
+
+        if (nodeValue == "") {
+            Serial.println("🔻 [ERROR] No 'node' value found in message.");
+            return;
+        }
+
+        Serial.println("🔹 [DEBUG] Node Value Extracted: " + nodeValue);
+
+        // Indicate successful reception (LED ON)
+        digitalWrite(PA7, HIGH);
+        delay(5000);
+        digitalWrite(PA7, LOW);
+        delay(1000);
+
+        // Send acknowledgment
+        String ack = "ack";
+        uint8_t payload[ack.length() + 1];
+        ack.getBytes(payload, ack.length() + 1);
+
+        bool send_result = false;
+        int attempts = 0;
+        const int max_attempts = 1;
+
+        while (!send_result && attempts < max_attempts) {
+            send_result = api.lora.psend(ack.length() + 1, payload);
+            Serial.printf("🔹 [DEBUG] Acknowledgment Sent: %s\r\n", send_result ? "Success" : "Fail");
+
+            if (!send_result) delay(1000);
+            attempts++;
+        }
+
+        Serial1.println(LoRaMessage);  // Forward message via Serial1
+    }
+
+    delay(2000); // Avoid spamming Serial Monitor
+}
+
