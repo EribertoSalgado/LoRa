@@ -4,8 +4,8 @@
 #include <sendRequest.h> 
 #include <ArduinoJson.h>
 
-const char* ssid  = "Erick's iPhone"; 
-const char* password = "Ramirez510";
+const char* ssid  = ""; 
+const char* password = "";
 
 const String url = "https://lightpink-sheep-430801.hostingersite.com/DataBaseUrlDataPushingPageP2P.php?";
 const String getTimeUrl = "https://timeapi.io/api/Time/current/zone?timeZone=America/Los_Angeles";
