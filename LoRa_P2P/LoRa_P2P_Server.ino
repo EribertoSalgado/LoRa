@@ -15,6 +15,7 @@ bool received = false;
 double myFreq = 905500000;
 uint16_t sf = 12, bw = 0, cr = 0, preamble = 8, txPower = 5;
 String LoRaMessage = "";
+int lastRSSI = 0;
 
 // Node identification
 enum RegisteredNodes {
@@ -55,6 +56,7 @@ void hexDump(uint8_t *buf, uint16_t len) {
 // Logs: length, RSSI, SNR
 // Ignore empty packets! Checks buffer size
 void recv_cb(rui_lora_p2p_recv_t data) {
+    lastRSSI = data.Rssi;
     // Ignore empty packets
     if (data.BufferSize == 0) {
         Serial.println("[DEBUG] Empty message received. Ignored.");
@@ -144,7 +146,8 @@ void loop() {
 
         Serial.println("Message Received!");
         Serial.print("LoRaMessage: ");
-        Serial.println(LoRaMessage);
+        String extendedMessage = LoRaMessage + "&rssi=" + String(lastRSSI); // Add RSSI to send to ESP
+        Serial1.println(extendedMessage);
 
         String nodeValue = getQueryValue(LoRaMessage, "node"); //extracts node val
           //Error check
@@ -153,7 +156,7 @@ void loop() {
             return;
         }
 
-        Serial.println("Node Value Extracted: " + nodeValue);
+        Serial.println("Node Value Extracted: ");
 
         // Indicate successful reception (LED ON)
         digitalWrite(PA4, HIGH);
@@ -177,8 +180,6 @@ void loop() {
             if (!send_result) delay(1000);
             attempts++;
         }
-
-        Serial1.println(LoRaMessage);  // Forward message via Serial1
     }
 
     delay(2000); // Avoid spamming Serial Monitor
