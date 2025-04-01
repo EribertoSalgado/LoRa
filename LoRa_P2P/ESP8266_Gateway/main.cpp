@@ -4,8 +4,8 @@
 #include <sendRequest.h> 
 #include <ArduinoJson.h>
 
-const char* ssid  = "<>"; 
-const char* password = "<>";
+const char* ssid  = "Pokemon Center"; 
+const char* password = "SalgadoE";
 
 const String url = "https://lightpink-sheep-430801.hostingersite.com/DataBaseUrlDataPushingPageP2P.php?";
 const String getTimeUrl = "https://timeapi.io/api/Time/current/zone?timeZone=America/Los_Angeles";
@@ -32,6 +32,8 @@ void setup() {
   }
 
   Serial.println("\nConnected to WiFi.");
+  Serial.println("LoRaP2P Ready!");
+
 }
 
 void loop() {
@@ -56,8 +58,8 @@ void loop() {
   }
 
   if (receivedFlag) {
-    delay(10000);
-  
+    delay(10000); //Allow 10 seconds before next data push to ensure the time is fetched and data is prepared
+    // Now we will fetch the current time from the API and update `currentTime`
     if (WiFi.status() == WL_CONNECTED) {
         WiFiClientSecure client;
         client.setInsecure();
@@ -74,11 +76,13 @@ void loop() {
             String response = https.getString();
             deserializeJson(doc, response);
             currentTime = String(doc["dateTime"]);
-            Serial.println("The current datetime is: " + currentTime); 
+            Serial.println("The current datetime is: " + currentTime);
             Serial.println("");
 
             // **Update `dataToBeSent` now that we have `currentTime`**
             // dB set up to only take 2 digit light values
+            //dataToBeSent = "node=" + nodeValue + "&time=" + currentTime + "&light=" + lightValue;
+            //there may be an empty space or null operator from the lightValue
             dataToBeSent = "node=" + nodeValue + "&time=" + currentTime + "&light=" + lightValue;
             Serial.println("Updated dataToBeSent: " + dataToBeSent);
           }
@@ -118,5 +122,6 @@ void loop() {
     }
 
     delay(30000);
+    Serial.println("Ready for next client input...");
   }
 }
