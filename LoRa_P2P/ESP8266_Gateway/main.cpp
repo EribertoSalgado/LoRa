@@ -1,11 +1,11 @@
-#include <Arduino.h> 
+#include <Arduino.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
 #include <sendRequest.h> 
 #include <ArduinoJson.h>
 
-const char* ssid  = ""; 
-const char* password = "";
+const char* ssid  = "Pokemon Center"; 
+const char* password = "SalgadoE";
 
 const String url = "https://lightpink-sheep-430801.hostingersite.com/DataBaseUrlDataPushingPageP2P.php?";
 const String getTimeUrl = "https://timeapi.io/api/Time/current/zone?timeZone=America/Los_Angeles";
@@ -18,21 +18,11 @@ String currentTime;
 bool receivedFlag = false;
 String nodeValue, lightValue, rssiValue;
 
-String getParamValue(String data, String key) {
-  int keyIndex = data.indexOf(key + "=");
-  if (keyIndex == -1) return "";
-
-  int valueStart = keyIndex + key.length() + 1;
-  int valueEnd = data.indexOf("&", valueStart);
-  if (valueEnd == -1) valueEnd = data.length();
-
-  return data.substring(valueStart, valueEnd);
-}
-
 void setup() {
   Serial.begin(115200);
-  Serial.println("ESP8266 UART Example\n");
-
+  Serial.println("ESP8266 UART Example");
+  Serial.println("");
+  
   Serial.println("Connecting to WiFi..."); 
   WiFi.begin(ssid, password);
   
@@ -42,7 +32,8 @@ void setup() {
   }
 
   Serial.println("\nConnected to WiFi.");
-  Serial.println("LoRaP2P Ready! HereIam3!");
+  Serial.println("\nLoRa Ready1!");
+
 }
 
 void loop() {
@@ -51,77 +42,86 @@ void loop() {
     Serial.println("Received: " + receivedData);
     Serial.println("");
 
-    // Clean parsing
-    nodeValue = getParamValue(receivedData, "node");
-    lightValue = getParamValue(receivedData, "light");
-    rssiValue = getParamValue(receivedData, "rssi");
-
-    if (nodeValue != "" && lightValue != "" && rssiValue != "") {
-      receivedFlag = true;
+    // Parse receivedData if it's in the format "node=1&light=300"
+    int nodeIndex = receivedData.indexOf("node=");
+    int lightIndex = receivedData.indexOf("light=");
+    int rssiIndex = receivedData.indexOf("rssi=");
+    
+    if (nodeIndex != -1 && lightIndex != -1) {
+        nodeValue = receivedData.substring(nodeIndex + 5, receivedData.indexOf("&", nodeIndex)); 
+        lightValue = receivedData.substring(lightIndex + 6, receivedData.indexOf("&", lightIndex));
+        rssiValue = receivedData.substring(rssiIndex + 5, receivedData.indexOf("&", rssiIndex));
+        
     } else {
-      Serial.println("Invalid data format received.");
-      return;
+        Serial.println("Invalid data format received.");
+        return;
     }
+
+    receivedFlag = true;
   }
 
   if (receivedFlag) {
-    delay(10000); // Allow 10 seconds before fetching time
-
+    delay(10000);
+  
     if (WiFi.status() == WL_CONNECTED) {
-      WiFiClientSecure client;
-      client.setInsecure();
-      HTTPClient https;
+        WiFiClientSecure client;
+        client.setInsecure();
+        HTTPClient https;
 
-      Serial.println("Requesting current time: --> " + getTimeUrl);
+        Serial.println("Requesting current time: --> " + getTimeUrl);
 
-      if (https.begin(client, getTimeUrl)) {
-        int httpCode = https.GET();
-        Serial.println("Response code <--: " + String(httpCode));
-        Serial.println("");
-
-        if (httpCode > 0) {
-          String response = https.getString();
-          deserializeJson(doc, response);
-          currentTime = String(doc["dateTime"]);
-          Serial.println("The current datetime is: " + currentTime);
+        if (https.begin(client, getTimeUrl)) {
+          int httpCode = https.GET();
+          Serial.println("Response code <--: " + String(httpCode));
           Serial.println("");
 
-          dataToBeSent = "node=" + nodeValue + "&time=" + currentTime + "&light=" + lightValue + "&rssi=" + rssiValue; 
-          Serial.println("Updated dataToBeSent: " + dataToBeSent);
+          if (httpCode > 0) {
+            String response = https.getString();
+            deserializeJson(doc, response);
+            currentTime = String(doc["dateTime"]);
+            Serial.println("The current datetime is: " + currentTime); 
+            Serial.println("");
+
+            // **Update `dataToBeSent` now that we have `currentTime`**
+            dataToBeSent = "node=" + nodeValue + "&time=" + currentTime + "&light=" + lightValue + "&rssi=" + rssiValue;
+            Serial.println("Updated dataToBeSent: " + dataToBeSent);
+          }
+          https.end();
+        } 
+        else {
+          Serial.printf("[HTTPS] Unable to connect to time server\n");
         }
-        https.end();
-      } else {
-        Serial.println("[HTTPS] Unable to connect to time server");
-      }
     }
 
-    if (WiFi.status() == WL_CONNECTED && currentTime != "") {
-      WiFiClientSecure client;
-      client.setInsecure();
-      HTTPClient https;
-      String fullUrl = url + dataToBeSent;
-      Serial.println("Requesting: --> " + fullUrl);
+    if (WiFi.status() == WL_CONNECTED && currentTime != "") { // Ensure time is set
+        WiFiClientSecure client;
+        client.setInsecure();
+        HTTPClient https;
+        String fullUrl = url + "time=" + currentTime;
+        Serial.println("Requesting: --> " + fullUrl);
 
-      if (https.begin(client, fullUrl)) {
-        https.addHeader("Content-Type", "application/x-www-form-urlencoded");
+        if (https.begin(client, fullUrl)) {
+            https.addHeader("Content-Type", "application/x-www-form-urlencoded");
 
-        Serial.println("Final dataToBeSent: " + dataToBeSent);
-        int httpCode = https.POST(dataToBeSent);
-        Serial.println("Response code <--: " + String(httpCode));
+            Serial.println("Final dataToBeSent: " + dataToBeSent);
+            int httpCode = https.POST(dataToBeSent);
 
-        if (httpCode > 0) {
-          Serial.println("Successfully posted new data.\n");
+            Serial.println("Response code <--: " + String(httpCode));
+
+            if (httpCode > 0) {
+                Serial.println("Successfully posted new data.");
+                Serial.println("");
+            }
+
+            https.end();
+        } 
+        else {
+          Serial.printf("[HTTPS] Unable to connect\n");
         }
 
-        https.end();
-      } else {
-        Serial.println("[HTTPS] Unable to connect");
-      }
-
-      receivedFlag = false;
+        receivedFlag = false;
     }
 
     delay(30000);
-    Serial.println("Ready for next client input...");
   }
 }
