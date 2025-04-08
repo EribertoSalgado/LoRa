@@ -1,4 +1,4 @@
-// Defining constants. 
+// Defining constants.
 #define OTAA_PERIOD   (60000) // This code will send uplink data every 60s.
 #define OTAA_BAND     (RAK_REGION_US915)
 #define OTAA_DEVEUI   {0x70, 0xB3, 0xD5, 0x7E, 0xD0, 0x06, 0xF4, 0x44}
@@ -144,7 +144,7 @@ void setup()
 
 void uplink_routine(double tempReading)
 {
-    String temp = "temp=";
+    String temp = "voltage=";
 
     String tempData = String(tempReading);
 
@@ -186,7 +186,6 @@ void loop()
     static uint64_t elapsed;
 
     int reading1 = ReadSensor();
-
     if ((elapsed = millis() - last) > OTAA_PERIOD) {
         uplink_routine(reading1);
   
