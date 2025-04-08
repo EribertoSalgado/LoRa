@@ -1,5 +1,5 @@
 // Defining constants.
-#define OTAA_PERIOD   (60000) // This code will send uplink data every 60s.
+#define OTAA_PERIOD   (3600000) // This code will send uplink data every 60s.
 #define OTAA_BAND     (RAK_REGION_US915)
 #define OTAA_DEVEUI   {0x70, 0xB3, 0xD5, 0x7E, 0xD0, 0x06, 0xF4, 0x44}
 #define OTAA_APPEUI   {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
