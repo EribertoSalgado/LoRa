@@ -4,10 +4,10 @@ function decodeUplink(input) {
   // Convert bytes to a string
   var payload = String.fromCharCode.apply(null, input.bytes);
 
-  // Parse the temperature from the string if it matches the "temp=xxx" format
+  // Parse the voltage from the string if it matches the "voltage=xxx" format
   if (payload.startsWith("voltage=")) {
-    var voltStr = payload.substring(8);  // Extract the number after "temp="
-    data.voltage = parseInt(voltStr);  // Convert the extracted string to an integer
+    var voltStr = payload.substring(8);  // Extract string after "voltage="
+    data.voltage = parseFloat(voltStr);  // Convert to float
   } else {
     // Handle any unexpected data format
     data.error = "Unexpected payload format: " + payload;
