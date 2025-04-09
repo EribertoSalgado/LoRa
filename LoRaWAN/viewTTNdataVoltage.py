@@ -1,198 +1,67 @@
-// Defining constants.
-#define OTAA_PERIOD   (3600000) // This code will send uplink data every 60s.
-#define OTAA_BAND     (RAK_REGION_US915)
-#define OTAA_DEVEUI   {0x70, 0xB3, 0xD5, 0x7E, 0xD0, 0x06, 0xF4, 0x44}
-#define OTAA_APPEUI   {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
-#define OTAA_APPKEY   {0x11, 0x7C, 0x70, 0xE4, 0xD6, 0x0E, 0x72, 0xC1, 0x37, 0x5E, 0x5C, 0x92, 0x27, 0xDF, 0x73, 0x9E}
-#define PHOTORESISTOR PB3
+#!/usr/bin/env python3
+import paho.mqtt.client as mqtt
+import json
+from datetime import datetime
 
-// Defining the constant variables.
-const double baudRate = 115200;
+# TTN parameters
+TTN_APP_ID = 'firstlora3'  # Replace with your TTN application ID
+TTN_DEVICE_ID = 'transmitter1'  # Replace with your TTN device ID
+TTN_ACCESS_KEY = 'NNSXS.BGHYYIOLYIKTX2ML6UQIKIS4JCNC2WMEDU7ZPXI.QYTUTEOOCFBBPNL3ZZYQZ4YICROES74XZINHITMGQSCEUC2BLDMA'  # Replace with your TTN access key
+TTN_SERVER = 'nam1.cloud.thethings.network'  # TTN server (adjust if needed)
+TTN_PORT = 1883  # Use 8883 with TLS
+# TTN_PORT = 8883  # Uncomment this and client.tls_set() for TLS
 
-/** Packet buffer for sending */
-uint8_t collected_data[64] = { 0 };
+# MQTT topic for your device's uplink messages
+TTN_TOPIC = f'v3/{TTN_APP_ID}@ttn/devices/{TTN_DEVICE_ID}/up'
 
-void recvCallback(SERVICE_LORA_RECEIVE_T * data)
-{
-    if (data->BufferSize > 0) {
-        Serial.println("Something received!");
-        for (int i = 0; i < data->BufferSize; i++) {
-            Serial.printf("%x", data->Buffer[i]);
-        }
-        Serial.print("\r\n");
-    }
-}
+# Counter for number of messages received
+counter = 0
 
-void joinCallback(int32_t status)
-{
-    Serial.printf("Join status: %d\r\n", status);
-}
+# Callback for when a message is received
+def on_message(client, userdata, message):
+    global counter
+    print("Received message from TTN")
+    try:
+        # Parse the incoming JSON payload
+        payload = json.loads(message.payload.decode('utf-8'))
 
-/*************************************
- * enum type for LoRa Event
-    RAK_LORAMAC_STATUS_OK = 0,
-    RAK_LORAMAC_STATUS_ERROR,
-    RAK_LORAMAC_STATUS_TX_TIMEOUT,
-    RAK_LORAMAC_STATUS_RX1_TIMEOUT,
-    RAK_LORAMAC_STATUS_RX2_TIMEOUT,
-    RAK_LORAMAC_STATUS_RX1_ERROR,
-    RAK_LORAMAC_STATUS_RX2_ERROR,
-    RAK_LORAMAC_STATUS_JOIN_FAIL,
-    RAK_LORAMAC_STATUS_DOWNLINK_REPEATED,
-    RAK_LORAMAC_STATUS_TX_DR_PAYLOAD_SIZE_ERROR,
-    RAK_LORAMAC_STATUS_DOWNLINK_TOO_MANY_FRAMES_LOSS,
-    RAK_LORAMAC_STATUS_ADDRESS_FAIL,
-    RAK_LORAMAC_STATUS_MIC_FAIL,
-    RAK_LORAMAC_STATUS_MULTICAST_FAIL,
-    RAK_LORAMAC_STATUS_BEACON_LOCKED,
-    RAK_LORAMAC_STATUS_BEACON_LOST,
-    RAK_LORAMAC_STATUS_BEACON_NOT_FOUND,
- *************************************/
+        # Extract the voltage value from decoded payload
+        voltage = payload['uplink_message']['decoded_payload'].get('voltage')
 
-void sendCallback(int32_t status)
-{
-    if (status == RAK_LORAMAC_STATUS_OK) {
-        Serial.println("Successfully sent");
-    } else {
-        Serial.println("Sending failed");
-    }
-}
+        if voltage is not None:
+            # Display voltage
+            print(f"Voltage reading: {voltage} V")
 
-void setup()
-{
-    Serial.println("Executing Setup Method!");
-    Serial.begin(115200, RAK_AT_MODE);
-    delay(2000);
-    
-    analogReadResolution(12);
-    pinMode(PHOTORESISTOR, INPUT);
+            # Timestamped logging
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            with open('sensor_data.txt', 'a') as f:
+                f.write(f"{timestamp} - Voltage: {voltage} V\n")
 
-    if(api.lorawan.nwm.get() != 1)
-    {
-        Serial.printf("Set Node device work mode %s\r\n",
-            api.lorawan.nwm.set() ? "Success" : "Fail");
-        api.system.reboot();
-    }
+        counter += 1
+        print(f"Messages received: {counter}\n")
 
-    // OTAA Device EUI MSB first
-    uint8_t node_device_eui[8] = OTAA_DEVEUI;
-    // OTAA Application EUI MSB first
-    uint8_t node_app_eui[8] = OTAA_APPEUI;
-    // OTAA Application Key MSB first
-    uint8_t node_app_key[16] = OTAA_APPKEY;
-  
-    if (!api.lorawan.appeui.set(node_app_eui, 8)) {
-        Serial.printf("LoRaWan OTAA - set application EUI is incorrect! \r\n");
-        return;
-    }
-    if (!api.lorawan.appkey.set(node_app_key, 16)) {
-        Serial.printf("LoRaWan OTAA - set application key is incorrect! \r\n");
-        return;
-    }
-    if (!api.lorawan.deui.set(node_device_eui, 8)) {
-        Serial.printf("LoRaWan OTAA - set device EUI is incorrect! \r\n");
-        return;
-    }
-  
-    if (!api.lorawan.band.set(OTAA_BAND)) {
-        Serial.printf("LoRaWan OTAA - set band is incorrect! \r\n");
-        return;
-    }
-    if (!api.lorawan.deviceClass.set(RAK_LORA_CLASS_A)) {
-        Serial.printf("LoRaWan OTAA - set device class is incorrect! \r\n");
-        return;
-    }
-    if (!api.lorawan.njm.set(RAK_LORA_OTAA))	// Set the network join mode to OTAA
-    {
-        Serial.printf("LoRaWan OTAA - set network join mode is incorrect! \r\n");
-        return;
-    }
-    if (!api.lorawan.join())	// Join to Gateway
-    {
-        Serial.printf("LoRaWan OTAA - join fail! \r\n");
-        return;
-    }
-  
-    /** Wait for Join success */
-    while (api.lorawan.njs.get() == 0) {
-        Serial.print("Wait for LoRaWAN join...");
-        api.lorawan.join();
-        delay(10000);
-    }
-  
-    if (!api.lorawan.adr.set(true)) {
-        Serial.printf("LoRaWan OTAA - set adaptive data rate is incorrect! \r\n");
-        return;
-    }
-    if (!api.lorawan.rety.set(1)) {
-        Serial.printf("LoRaWan OTAA - set retry times is incorrect! \r\n");
-        return;
-    }
-    if (!api.lorawan.cfm.set(1)) {
-        Serial.printf("LoRaWan OTAA - set confirm mode is incorrect! \r\n");
-        return;
-    }
-  
-    /** Check LoRaWan Status*/
-    Serial.printf("Duty cycle is %s\r\n", api.lorawan.dcs.get()? "ON" : "OFF");	// Check Duty Cycle status
-    Serial.printf("Packet is %s\r\n", api.lorawan.cfm.get()? "CONFIRMED" : "UNCONFIRMED");	// Check Confirm status
-    uint8_t assigned_dev_addr[4] = { 0 };
-    api.lorawan.daddr.get(assigned_dev_addr, 4);
-    Serial.printf("Device Address is %02X%02X%02X%02X\r\n", assigned_dev_addr[0], assigned_dev_addr[1], assigned_dev_addr[2], assigned_dev_addr[3]);	// Check Device Address
-    Serial.printf("Uplink period is %ums\r\n", OTAA_PERIOD);
-    Serial.println("");
-    api.lorawan.registerRecvCallback(recvCallback);
-    api.lorawan.registerJoinCallback(joinCallback);
-    api.lorawan.registerSendCallback(sendCallback);
-}
+    except Exception as e:
+        print(f"Error processing message: {e}")
 
+# Callback for when client connects to the MQTT broker
+def on_connect(client, userdata, flags, rc):
+    if rc == 0:
+        print("Connected to TTN")
+        client.subscribe(TTN_TOPIC)
+    else:
+        print(f"Failed to connect, return code {rc}")
 
-void uplink_routine(float voltage) {
-    String label = "voltage=";
-    String value = String(voltage, 3);
-    String payload = label + value;
+# Create MQTT client and set credentials
+client = mqtt.Client()
+client.username_pw_set(f'{TTN_APP_ID}@ttn', password=TTN_ACCESS_KEY)
 
-    uint8_t data_len = payload.length();
-    for (int i = 0; i < data_len; i++) {
-        collected_data[i] = payload[i];
-    }
+# Optional TLS support (uncomment to enable)
+# client.tls_set()
 
-    Serial.println("Data Packet:");
-    for (int i = 0; i < data_len; i++) {
-        Serial.printf("0x%02X ", collected_data[i]);
-    }
-    Serial.println("");
+# Assign event callbacks
+client.on_connect = on_connect
+client.on_message = on_message
 
-    if (api.lorawan.send(data_len, collected_data, 2, true, 1)) {
-        Serial.println("Sending is requested");
-    } else {
-        Serial.println("Sending failed");
-    }
-}
-
-float ReadSensor() {
-    int raw = analogRead(PHOTORESISTOR);
-    float voltage = (float(raw) / 4096.0) * 3.3;
-    Serial.print("ADC: ");
-    Serial.print(raw);
-    Serial.print(" -> Voltage: ");
-    Serial.print(voltage, 3);
-    Serial.println(" V");
-    return voltage;
-}
-
-void loop()
-{
-    static uint64_t last = 0;
-    static uint64_t elapsed;
-
-    float voltage = ReadSensor();
-    if ((elapsed = millis() - last) > OTAA_PERIOD) {
-        uplink_routine(voltage);
-  
-        last = millis();
-    }
-
-    // Calling sleep period - LoRa device will not transmit.
-    api.system.sleep.all(OTAA_PERIOD);
-}
+# Connect and start listening
+client.connect(TTN_SERVER, TTN_PORT, 60)
+client.loop_forever()
