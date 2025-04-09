@@ -4,6 +4,7 @@
 #define OTAA_DEVEUI   {0x70, 0xB3, 0xD5, 0x7E, 0xD0, 0x06, 0xF4, 0x44}
 #define OTAA_APPEUI   {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
 #define OTAA_APPKEY   {0x11, 0x7C, 0x70, 0xE4, 0xD6, 0x0E, 0x72, 0xC1, 0x37, 0x5E, 0x5C, 0x92, 0x27, 0xDF, 0x73, 0x9E}
+#define PHOTORESISTOR PB3
 
 // Defining the constant variables.
 const double baudRate = 115200;
@@ -62,7 +63,10 @@ void setup()
     Serial.println("Executing Setup Method!");
     Serial.begin(115200, RAK_AT_MODE);
     delay(2000);
-  
+    
+    analogReadResolution(12);
+    pinMode(PHOTORESISTOR, INPUT);
+
     if(api.lorawan.nwm.get() != 1)
     {
         Serial.printf("Set Node device work mode %s\r\n",
@@ -142,42 +146,39 @@ void setup()
     api.lorawan.registerSendCallback(sendCallback);
 }
 
-void uplink_routine(double tempReading)
-{
-    String temp = "voltage=";
 
-    String tempData = String(tempReading);
+void uplink_routine(float voltage) {
+    String label = "voltage=";
+    String value = String(voltage, 3);
+    String payload = label + value;
 
-    uint8_t lengthOfTempReading = tempData.length();
-    uint8_t lengthOfTempVarName = temp.length();
-    
-    // This is the payload of the uplink.
-    String datum = temp + tempData;
-    uint8_t data_len = lengthOfTempReading + lengthOfTempVarName;
-
-    // The packet.
-    for (int i = 0; i < data_len; i++){
-      collected_data[i] = datum[i];
+    uint8_t data_len = payload.length();
+    for (int i = 0; i < data_len; i++) {
+        collected_data[i] = payload[i];
     }
-    
-    // Printing the data packet.
+
     Serial.println("Data Packet:");
     for (int i = 0; i < data_len; i++) {
         Serial.printf("0x%02X ", collected_data[i]);
     }
     Serial.println("");
-  
-    /** Send the data package */
-    if (api.lorawan.send(data_len, (uint8_t *) & collected_data, 2, true, 1)) {
+
+    if (api.lorawan.send(data_len, collected_data, 2, true, 1)) {
         Serial.println("Sending is requested");
     } else {
         Serial.println("Sending failed");
     }
 }
 
-int ReadSensor(){
-  int reading = random(0, 100);
-  return reading;
+float ReadSensor() {
+    int raw = analogRead(PHOTORESISTOR);
+    float voltage = (float(raw) / 4096.0) * 3.3;
+    Serial.print("ADC: ");
+    Serial.print(raw);
+    Serial.print(" -> Voltage: ");
+    Serial.print(voltage, 3);
+    Serial.println(" V");
+    return voltage;
 }
 
 void loop()
@@ -185,9 +186,9 @@ void loop()
     static uint64_t last = 0;
     static uint64_t elapsed;
 
-    int reading1 = ReadSensor();
+    float voltage = ReadSensor();
     if ((elapsed = millis() - last) > OTAA_PERIOD) {
-        uplink_routine(reading1);
+        uplink_routine(voltage);
   
         last = millis();
     }
