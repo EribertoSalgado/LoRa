@@ -1,5 +1,8 @@
 #include <Arduino.h>
 
+#define BUTTON_PIN PA7
+#define LED_PIN PA4
+
 long startTime;
 bool rx_done = false;
 double myFreq = 905500000;
@@ -43,29 +46,15 @@ void hexDump(uint8_t * buf, uint16_t len)
 void parseHexDump(uint8_t *buf, uint16_t len) {
     Serial.println("Parsed Data:");
     for (uint16_t i = 0; i < len; i++) {
-        // Example: Print each byte as a character if it's printable
-        if (buf[i] >= 32 && buf[i] < 127) { // ASCII printable range
+        if (buf[i] >= 32 && buf[i] < 127) {
             Serial.print((char)buf[i]);
         } else {
             Serial.print('.');
         }
     }
-    
-    Serial.println(); // New line after parsing
+    Serial.println();
 }
 
-/*
-  typedef struct rui_lora_p2p_revc {
-  // Pointer to the received data stream
-  uint8_t *Buffer;
-  // Size of the received data stream
-  uint8_t BufferSize;
-  // Rssi of the received packet
-  int16_t Rssi;
-  // Snr of the received packet
-  int8_t Snr;
-  } rui_lora_p2p_recv_t;
-*/
 void recv_cb(rui_lora_p2p_recv_t data)
 {
     rx_done = true;
@@ -76,7 +65,6 @@ void recv_cb(rui_lora_p2p_recv_t data)
     }
 
     char buff[92];
-
     sprintf(buff, "Incoming message, length: %d, RSSI: %d, SNR: %d", data.BufferSize, data.Rssi, data.Snr);
     Serial.println("The raw message:");
     Serial.println(buff);
@@ -88,6 +76,8 @@ void recv_cb(rui_lora_p2p_recv_t data)
 void send_cb(void)
 {
   Serial.println("DATA SENT!!!");
+  // Turn off the LED now that the data has been sent.
+  digitalWrite(LED_PIN, LOW);
   delay(1000);
   Serial.printf("P2P set Rx mode %s\r\n", api.lora.precv(10000) ? "Success" : "Fail");
 }
@@ -98,6 +88,8 @@ void setup()
   Serial.println("LoRa Client Set up!");
   Serial.println("------------------------------------------------------");
   delay(2000);
+  pinMode(LED_PIN, OUTPUT);
+  pinMode(BUTTON_PIN, INPUT);
   startTime = millis();
 
   if(api.lora.nwm.get() != 0)
@@ -110,12 +102,9 @@ void setup()
   Serial.println("P2P Start");
   Serial.printf("Hardware ID: %s\r\n", api.system.chipId.get().c_str());
   Serial.printf("Model ID: %s\r\n", api.system.modelId.get().c_str());
-  Serial.printf("RUI API Version: %s\r\n",
-  api.system.apiVersion.get().c_str());
-  Serial.printf("Firmware Version: %s\r\n",
-  api.system.firmwareVersion.get().c_str());
-  Serial.printf("AT Command Version: %s\r\n",
-  api.system.cliVersion.get().c_str());
+  Serial.printf("RUI API Version: %s\r\n", api.system.apiVersion.get().c_str());
+  Serial.printf("Firmware Version: %s\r\n", api.system.firmwareVersion.get().c_str());
+  Serial.printf("AT Command Version: %s\r\n", api.system.cliVersion.get().c_str());
   Serial.printf("Set P2P mode frequency %3.3f: %s\r\n", (myFreq / 1e6),
   api.lora.pfreq.set(myFreq) ? "Success" : "Fail");
   Serial.printf("Set P2P mode spreading factor %d: %s\r\n", sf,
@@ -130,50 +119,50 @@ void setup()
   api.lora.ptp.set(txPower) ? "Success" : "Fail");
   api.lora.registerPRecvCallback(recv_cb);
   api.lora.registerPSendCallback(send_cb);
-  Serial.printf("P2P set Rx mode %s\r\n",
-  api.lora.precv(3000) ? "Success" : "Fail");
+  Serial.printf("P2P set Rx mode %s\r\n", api.lora.precv(3000) ? "Success" : "Fail");
 
   rx_done = true;
 }
 
-  int ReadSensor(){
-    int reading = random(0, 200);
-    return reading;
-  }
-  
+bool ReadSensor() {
+  // Return true if the button is pressed (HIGH)
+  return (digitalRead(BUTTON_PIN) == HIGH);
+}
+
 void loop()
-{
-    int data = ReadSensor();
-    String temp = "node=" + edgeNodeName + "&" + "light=" + String(data);
+{   
+    digitalWrite(LED_PIN, HIGH);
+    if (ReadSensor()){
+        // Turn off the LED immediately when the button is pressed
+        digitalWrite(LED_PIN, LOW);
 
-    Serial.println("Generated Payload String:");
-    Serial.println(temp);
+        // Generate payload string with a fixed sensor value ("1" when pressed)
+        String temp = "node=" + edgeNodeName + "&" + "light=1";
 
-    uint8_t payload[temp.length()];  // Fix: Remove extra byte for null character
-    temp.getBytes(payload, temp.length() + 1); 
+        Serial.println("Generated Payload String:");
+        Serial.println(temp);
 
-    Serial.println("Converted Payload (HEX):");
-    for (size_t i = 0; i < temp.length(); i++) { // Fix: Only iterate over temp.length()
-        Serial.printf("%02X ", payload[i]);
-    }
-    Serial.println();
+        uint8_t payload[temp.length()];
+        temp.getBytes(payload, temp.length() + 1); 
 
-    Serial.println("Converted Payload (ASCII):");
-    for (size_t i = 0; i < temp.length(); i++) { // Fix: Only iterate over temp.length()
-        Serial.print((char)payload[i]);
-    }
-    Serial.println();
-    
-    bool send_result = false;
+        Serial.println("Converted Payload (HEX):");
+        for (size_t i = 0; i < temp.length(); i++) {
+            Serial.printf("%02X ", payload[i]);
+        }
+        Serial.println();
 
-    if (rx_done) {
-        rx_done = false;
-
-        send_result = api.lora.psend(temp.length(), payload); // Fix: Send correct length
-        Serial.printf("P2P send %s\r\n", send_result ? "Success" : "Fail");
-
-        delay(1000);
-    }
-
-    delay(60000);
+        Serial.println("Converted Payload (ASCII):");
+        for (size_t i = 0; i < temp.length(); i++) {
+            Serial.print((char)payload[i]);
+        }
+        Serial.println();
+        
+        if (rx_done) {
+            rx_done = false;
+            bool send_result = api.lora.psend(temp.length(), payload);
+            Serial.printf("P2P send %s\r\n", send_result ? "Success" : "Fail");
+        }
+        
+        delay(5000);  // Debounce delay
+  }
 }
