@@ -1,11 +1,12 @@
+// Final Draft
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
 #include <sendRequest.h> 
 #include <ArduinoJson.h>
 
-const char* ssid  = ""; 
-const char* password = "";
+const char* ssid  = "Pokemon Center"; 
+const char* password = "SalgadoE";
 
 const String url = "https://lightpink-sheep-430801.hostingersite.com/DataBaseUrlDataPushingPageP2P.php?";
 const String getTimeUrl = "https://timeapi.io/api/Time/current/zone?timeZone=America/Los_Angeles";
@@ -32,7 +33,7 @@ void setup() {
   }
 
   Serial.println("\nConnected to WiFi.");
-  Serial.println("\nLoRa Ready1!");
+  Serial.println("\nLoRa Ready!");
 
 }
 
